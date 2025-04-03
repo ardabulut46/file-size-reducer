@@ -255,6 +255,7 @@
             const reducedBar = document.getElementById('reduced-bar');
             
             let currentFile = null;
+            let currentProcessedFile = null;
             
             // Set up event listeners
             selectFileBtn.addEventListener('click', () => fileInput.click());
@@ -459,8 +460,9 @@
                     (response.reduced_size / response.original_size * 100) : 100;
                 reducedBar.style.width = reduction + '%';
                 
-                // Set download link
+                // Set download link and remember the processed filename
                 downloadBtn.href = '/download/' + response.processed_name;
+                currentProcessedFile = response.processed_name;
                 
                 // Show FFmpeg warning if needed
                 const ffmpegWarning = document.getElementById('ffmpeg-warning');
@@ -472,6 +474,33 @@
                 
                 // Show result section
                 resultSection.style.display = 'block';
+                
+                // Add download completion handler to reset the UI after download
+                if (!downloadBtn.hasClickListener) {
+                    downloadBtn.addEventListener('click', function() {
+                        // After a delay to allow download to start, reset the UI
+                        setTimeout(() => {
+                            resetUI();
+                        }, 1500);
+                    });
+                    downloadBtn.hasClickListener = true;
+                }
+            }
+            
+            function resetUI() {
+                // Hide all sections except the main upload area
+                fileInfo.style.display = 'none';
+                optionsSection.style.display = 'none';
+                processingSection.style.display = 'none';
+                resultSection.style.display = 'none';
+                
+                // Reset file input
+                fileInput.value = '';
+                currentFile = null;
+                currentProcessedFile = null;
+                
+                // Reset progress bar
+                uploadProgress.style.width = '0%';
             }
             
             function formatFileSize(bytes) {

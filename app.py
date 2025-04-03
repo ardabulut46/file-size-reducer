@@ -10,11 +10,15 @@ from werkzeug.utils import secure_filename
 import ffmpeg
 import shutil
 import subprocess
+import atexit
+from apscheduler.schedulers.background import BackgroundScheduler
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['PROCESSED_FOLDER'] = 'processed'
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024 * 1024  # 10GB max upload size
+app.config['CLEANUP_INTERVAL'] = 10 * 60  # 10 minutes in seconds
+app.config['URGENT_CLEANUP_INTERVAL'] = 60  # 1 minute for files marked for urgent cleanup
 app.config['ALLOWED_EXTENSIONS'] = {
     'image': {'png', 'jpg', 'jpeg', 'gif', 'webp'},
     'video': {'mp4', 'avi', 'mov', 'mkv', 'wmv'},
@@ -23,6 +27,67 @@ app.config['ALLOWED_EXTENSIONS'] = {
 
 # In-memory storage for processing progress
 processing_status = {}
+
+# Set up scheduler for regular cleanup
+scheduler = BackgroundScheduler()
+
+def scheduled_cleanup():
+    """Run cleanup automatically on a schedule"""
+    with app.app_context():
+        current_time = time.time()
+        regular_cleanup_threshold = current_time - app.config['CLEANUP_INTERVAL']
+        urgent_cleanup_threshold = current_time - app.config['URGENT_CLEANUP_INTERVAL']
+        
+        # Clean up uploads folder
+        for filename in os.listdir(app.config['UPLOAD_FOLDER']):
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            
+            # Check if file is marked for urgent cleanup (modified time very old) or past regular threshold
+            if os.path.getmtime(file_path) < urgent_cleanup_threshold:
+                try:
+                    os.remove(file_path)
+                    print(f"Scheduler: Removed urgent file {file_path}")
+                except Exception as e:
+                    print(f"Scheduler: Error removing {file_path}: {e}")
+            elif os.path.getmtime(file_path) < regular_cleanup_threshold:
+                try:
+                    os.remove(file_path)
+                    print(f"Scheduler: Removed old upload {file_path}")
+                except Exception as e:
+                    print(f"Scheduler: Error removing {file_path}: {e}")
+        
+        # Clean up processed folder
+        for filename in os.listdir(app.config['PROCESSED_FOLDER']):
+            file_path = os.path.join(app.config['PROCESSED_FOLDER'], filename)
+            
+            # Check if file is marked for urgent cleanup or past regular threshold
+            if os.path.getmtime(file_path) < urgent_cleanup_threshold:
+                try:
+                    os.remove(file_path)
+                    print(f"Scheduler: Removed urgent processed file {file_path}")
+                except Exception as e:
+                    print(f"Scheduler: Error removing {file_path}: {e}")
+            elif os.path.getmtime(file_path) < regular_cleanup_threshold:
+                try:
+                    os.remove(file_path)
+                    print(f"Scheduler: Removed old processed file {file_path}")
+                except Exception as e:
+                    print(f"Scheduler: Error removing {file_path}: {e}")
+        
+        # Clean up processing_status dict
+        for task_id in list(processing_status.keys()):
+            status = processing_status[task_id]
+            if status['state'] in ['completed', 'error'] and 'timestamp' in status:
+                if status['timestamp'] < regular_cleanup_threshold:
+                    del processing_status[task_id]
+                    print(f"Scheduler: Removed old task status {task_id}")
+
+# Schedule the cleanup to run at the defined interval
+scheduler.add_job(scheduled_cleanup, 'interval', minutes=1)  # Run every minute for more reliable cleanup
+scheduler.start()
+
+# Shut down the scheduler when exiting the app
+atexit.register(lambda: scheduler.shutdown())
 
 # Ensure upload and processed directories exist
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
@@ -416,34 +481,185 @@ def get_processing_status(task_id):
 
 @app.route('/download/<filename>')
 def download_file(filename):
-    return send_from_directory(app.config['PROCESSED_FOLDER'], filename)
+    """Send the processed file to the client and schedule it for deletion after download."""
+    # Track the original file that corresponds to this processed file
+    original_filename = filename.replace('reduced_', '')
+    processed_path = os.path.join(app.config['PROCESSED_FOLDER'], filename)
+    original_path = os.path.join(app.config['UPLOAD_FOLDER'], original_filename)
+    
+    # Check if the file exists
+    if not os.path.exists(processed_path):
+        return jsonify({'error': 'File not found'}), 404
+    
+    # Since Flask's call_on_close is not reliable in all environments,
+    # we'll use a combination of approaches:
+    
+    # 1. Mark these files for "urgent cleanup" with a very short time window
+    try:
+        # Update file access time to now, but modification time to make it appear old
+        # This ensures the scheduled cleanup will remove it soon
+        current_time = time.time()
+        urgency_time = current_time - app.config['URGENT_CLEANUP_INTERVAL'] - 10  # Ensure it's beyond the urgent threshold
+        
+        # Set the modified time to make it eligible for cleanup soon
+        os.utime(processed_path, (current_time, urgency_time))
+        if os.path.exists(original_path):
+            os.utime(original_path, (current_time, urgency_time))
+    except Exception as e:
+        print(f"Error setting file timestamps: {e}")
+    
+    # 2. Schedule an immediate background cleanup with a small delay
+    try:
+        def delayed_cleanup():
+            # Wait a few seconds to let the download start
+            time.sleep(5)
+            
+            try:
+                # Try to delete the processed file
+                if os.path.exists(processed_path):
+                    os.remove(processed_path)
+                    print(f"Background thread: Deleted processed file {processed_path}")
+                
+                # Try to delete the original file
+                if os.path.exists(original_path):
+                    os.remove(original_path)
+                    print(f"Background thread: Deleted original file {original_path}")
+            except Exception as e:
+                print(f"Background thread: Error deleting files: {e}")
+        
+        # Start the delayed cleanup in a background thread
+        thread = threading.Thread(target=delayed_cleanup)
+        thread.daemon = True
+        thread.start()
+    except Exception as e:
+        print(f"Error scheduling background cleanup: {e}")
+    
+    # 3. Still try to use call_on_close as a backup
+    response = send_from_directory(
+        app.config['PROCESSED_FOLDER'], 
+        filename, 
+        as_attachment=True
+    )
+    
+    @response.call_on_close
+    def cleanup_after_download():
+        try:
+            # Attempt to delete the processed file
+            if os.path.exists(processed_path):
+                os.remove(processed_path)
+                print(f"call_on_close: Deleted processed file: {processed_path}")
+                
+            # Attempt to delete the original file
+            if os.path.exists(original_path):
+                os.remove(original_path)
+                print(f"call_on_close: Deleted original file: {original_path}")
+        except Exception as e:
+            print(f"call_on_close: Error during file cleanup: {str(e)}")
+    
+    return response
 
 @app.route('/cleanup', methods=['POST'])
 def cleanup():
-    """Cleanup temporary files older than 1 hour"""
+    """Cleanup temporary files older than the configured cleanup interval"""
     current_time = time.time()
-    one_hour_ago = current_time - 3600
+    cleanup_threshold = current_time - app.config['CLEANUP_INTERVAL']
+    
+    removed_files = []
     
     # Clean up uploads folder
     for filename in os.listdir(app.config['UPLOAD_FOLDER']):
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        if os.path.getmtime(file_path) < one_hour_ago:
-            os.remove(file_path)
+        if os.path.getmtime(file_path) < cleanup_threshold:
+            try:
+                os.remove(file_path)
+                removed_files.append(file_path)
+            except Exception as e:
+                print(f"Error removing {file_path}: {e}")
     
     # Clean up processed folder
     for filename in os.listdir(app.config['PROCESSED_FOLDER']):
         file_path = os.path.join(app.config['PROCESSED_FOLDER'], filename)
-        if os.path.getmtime(file_path) < one_hour_ago:
-            os.remove(file_path)
+        if os.path.getmtime(file_path) < cleanup_threshold:
+            try:
+                os.remove(file_path)
+                removed_files.append(file_path)
+            except Exception as e:
+                print(f"Error removing {file_path}: {e}")
     
     # Clean up processing_status dict
     for task_id in list(processing_status.keys()):
         status = processing_status[task_id]
         if status['state'] in ['completed', 'error'] and 'timestamp' in status:
-            if status['timestamp'] < one_hour_ago:
+            if status['timestamp'] < cleanup_threshold:
                 del processing_status[task_id]
     
-    return jsonify({'message': 'Cleanup completed'})
+    return jsonify({
+        'message': 'Cleanup completed', 
+        'files_removed': len(removed_files)
+    })
+
+@app.route('/cleanup-all', methods=['POST'])
+def cleanup_all():
+    """Forcibly clean up all temporary files"""
+    removed_files = []
+    
+    # Clean up uploads folder
+    for filename in os.listdir(app.config['UPLOAD_FOLDER']):
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        try:
+            os.remove(file_path)
+            removed_files.append(file_path)
+        except Exception as e:
+            print(f"Error removing {file_path}: {e}")
+    
+    # Clean up processed folder
+    for filename in os.listdir(app.config['PROCESSED_FOLDER']):
+        file_path = os.path.join(app.config['PROCESSED_FOLDER'], filename)
+        try:
+            os.remove(file_path)
+            removed_files.append(file_path)
+        except Exception as e:
+            print(f"Error removing {file_path}: {e}")
+    
+    return jsonify({
+        'message': 'All files cleaned up',
+        'files_removed': len(removed_files),
+        'removed_files': removed_files
+    })
+
+@app.route('/delete-files', methods=['POST'])
+def delete_files():
+    """Delete specific files from the request"""
+    processed_filename = request.json.get('processed_filename')
+    if not processed_filename:
+        return jsonify({'error': 'No filename provided'}), 400
+    
+    original_filename = processed_filename.replace('reduced_', '')
+    removed_files = []
+    
+    # Delete processed file
+    processed_path = os.path.join(app.config['PROCESSED_FOLDER'], processed_filename)
+    if os.path.exists(processed_path):
+        try:
+            os.remove(processed_path)
+            removed_files.append(processed_path)
+        except Exception as e:
+            print(f"Error removing {processed_path}: {e}")
+    
+    # Delete original file
+    original_path = os.path.join(app.config['UPLOAD_FOLDER'], original_filename)
+    if os.path.exists(original_path):
+        try:
+            os.remove(original_path)
+            removed_files.append(original_path)
+        except Exception as e:
+            print(f"Error removing {original_path}: {e}")
+    
+    return jsonify({
+        'message': 'Files deleted successfully',
+        'files_removed': len(removed_files),
+        'removed_files': removed_files
+    })
 
 @app.route('/check-ffmpeg')
 def check_ffmpeg():

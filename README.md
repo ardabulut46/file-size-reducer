@@ -10,6 +10,7 @@ A powerful and easy-to-use web application for reducing the size of various file
 - **Customizable compression**: Adjust quality and size settings for optimal results
 - **Progress tracking**: Real-time progress indicators for uploads and processing
 - **Comparison visualization**: See before and after file sizes with visual comparison
+- **Automatic file cleanup**: Files are automatically deleted after download or after 15 minutes
 
 ## Requirements
 
@@ -21,14 +22,14 @@ A powerful and easy-to-use web application for reducing the size of various file
 1. **Clone the repository**
 
 ```bash
-git clone https://github.com/yourusername/file-size-reducer.git
+git clone https://github.com/ardabulut46/file-size-reducer.git
 cd file-size-reducer
 ```
 
 2. **Install the Python dependencies**
 
 ```bash
-pip install flask opencv-python-headless python-dotenv ffmpeg-python tqdm
+pip install -r requirements.txt
 ```
 
 3. **Install FFmpeg** (if not already installed)
@@ -88,6 +89,17 @@ Open your browser and navigate to [http://localhost:5000](http://localhost:5000)
 - Uses FFmpeg with CRF settings to compress video
 - Maintains aspect ratio and frame rate
 - Balances quality and file size
+
+### File Storage
+- Uploaded files are stored temporarily in the 'uploads' directory
+- Processed files are stored in the 'processed' directory
+- Files are automatically deleted immediately after download using multiple reliable methods:
+  - A background thread that removes files a few seconds after download begins
+  - Files are marked for urgent cleanup to be handled by the cleanup scheduler
+  - Backup mechanisms to ensure deletion even in case of connection issues
+- A background scheduler runs every minute to ensure no files remain on the server
+- Regular files are cleaned up after 10 minutes, urgent files after 1 minute
+- No persistent storage of user files to maintain privacy and save disk space
 
 ## Contributing
 
