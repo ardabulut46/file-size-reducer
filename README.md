@@ -107,4 +107,40 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details. 
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Docker Deployment
+
+This application can be easily deployed using Docker:
+
+### Local Development
+
+```bash
+# Build and run with docker-compose
+docker-compose up -d
+```
+
+### DigitalOcean Deployment
+
+1. Push your code to GitHub
+2. Create a new DigitalOcean Droplet with Docker pre-installed
+3. SSH into your Droplet
+4. Clone your repository
+5. Run the application with Docker:
+
+```bash
+# Clone the repository
+git clone <your-repo-url>
+cd <your-repo-directory>
+
+# Build and run the Docker container
+docker build -t file-size-reducer .
+docker run -d -p 80:8080 -v $(pwd)/uploads:/app/uploads -v $(pwd)/processed:/app/processed --name file-reducer file-size-reducer
+```
+
+Alternatively, use DigitalOcean's App Platform with the Dockerfile-based deployment option:
+
+1. Select your repository
+2. Choose "Dockerfile" as the deployment method
+3. Configure the HTTP port as 8080
+4. Deploy the application 
