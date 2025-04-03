@@ -1,0 +1,18 @@
+name: file-size-reducer
+services:
+  - name: web
+    github:
+      branch: main
+      deploy_on_push: true
+    build_command: pip install -r requirements.txt
+    run_command: gunicorn app:app
+    envs:
+      - key: PYTHONUNBUFFERED
+        value: "1"
+    http_port: 8080
+    routes:
+      - path: /
+    packages:
+      - ffmpeg
+      - libsm6
+      - libxext6 
