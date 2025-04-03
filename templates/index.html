@@ -9,10 +9,14 @@
     <title>File Size Reducer</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     <style>
         body {
             background-color: #f8f9fa;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #212529;
+            padding: 2rem 0;
         }
         .main-container {
             max-width: 800px;
@@ -111,6 +115,112 @@
             top: 0;
             left: 0;
         }
+        .main-container {
+            max-width: 800px;
+            padding: 30px;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        .upload-container {
+            border: 2px dashed #6c757d;
+            border-radius: 10px;
+            padding: 40px 20px;
+            text-align: center;
+            transition: border-color 0.3s;
+            cursor: pointer;
+            margin-bottom: 2rem;
+        }
+        .upload-container:hover {
+            border-color: #0d6efd;
+        }
+        .upload-icon {
+            font-size: 3rem;
+            color: #6c757d;
+            margin-bottom: 1rem;
+        }
+        #file-info {
+            display: none;
+            margin-bottom: 2rem;
+        }
+        .file-type-icon {
+            font-size: 2.5rem;
+            margin-right: 1rem;
+            color: #6c757d;
+        }
+        .progress {
+            height: 8px;
+            margin-top: 0.5rem;
+        }
+        #processing-section {
+            text-align: center;
+            margin-bottom: 2rem;
+            display: none;
+        }
+        .spinner {
+            width: 3rem;
+            height: 3rem;
+            margin-bottom: 1rem;
+        }
+        #result-section {
+            display: none;
+            margin-bottom: 2rem;
+        }
+        .result-row {
+            display: flex;
+            margin-bottom: 1rem;
+            align-items: center;
+        }
+        .size-bar {
+            height: 30px;
+            border-radius: 5px;
+            margin-right: 1rem;
+            flex: 1;
+        }
+        .original-bar {
+            background-color: #6c757d;
+        }
+        .reduced-bar {
+            background-color: #198754;
+            position: relative;
+        }
+        .savings-badge {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            background-color: #0d6efd;
+            padding: 0.2rem 0.5rem;
+            border-radius: 1rem;
+            color: white;
+            font-size: 0.8rem;
+        }
+        .size-value {
+            min-width: 100px;
+            text-align: right;
+        }
+        .slider-container {
+            display: flex;
+            align-items: center;
+            flex: 1;
+        }
+        .slider {
+            flex: 1;
+            margin-right: 10px;
+        }
+        .option-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .option-row label {
+            min-width: 100px;
+            margin-bottom: 0;
+        }
     </style>
 </head>
 <body>
@@ -148,19 +258,36 @@
         <div id="options-section" class="options-section mt-4" style="display: none;">
             <h5>Compression Options</h5>
             <div id="image-options" style="display: none;">
-                <div class="mb-3">
-                    <label for="quality-slider" class="form-label">Quality: <span id="quality-value">70</span>%</label>
-                    <input type="range" class="form-range" id="quality-slider" min="10" max="100" value="70">
+                <div class="option-row">
+                    <label for="quality-slider">Quality:</label>
+                    <div class="slider-container">
+                        <input type="range" id="quality-slider" min="10" max="100" step="1" value="70" class="slider">
+                        <span id="quality-value">70%</span>
+                    </div>
                 </div>
-                <div class="mb-3">
-                    <label for="resize-slider" class="form-label">Resize Factor: <span id="resize-value">0.8</span>x</label>
-                    <input type="range" class="form-range" id="resize-slider" min="0.1" max="1" step="0.1" value="0.8">
+                <div class="option-row">
+                    <label for="resize-slider">Size:</label>
+                    <div class="slider-container">
+                        <input type="range" id="resize-slider" min="0.1" max="1" step="0.05" value="0.8" class="slider">
+                        <span id="resize-value">80%</span>
+                    </div>
                 </div>
             </div>
             <div id="video-options" style="display: none;">
-                <div class="mb-3">
-                    <label for="crf-slider" class="form-label">Compression Quality: <span id="crf-value">28</span> (Lower is better quality)</label>
-                    <input type="range" class="form-range" id="crf-slider" min="18" max="38" value="28">
+                <div class="option-row">
+                    <label for="crf-slider">Quality:</label>
+                    <div class="slider-container">
+                        <input type="range" id="crf-slider" min="18" max="35" step="1" value="28" class="slider">
+                        <span id="crf-value">28</span>
+                    </div>
+                    <small class="text-muted">Lower value = higher quality, higher file size. Range: 18 (high quality) to 35 (low quality)</small>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="client-side-compression" checked>
+                    <label class="form-check-label" for="client-side-compression">
+                        Use client-side preprocessing for large files
+                    </label>
+                    <small class="text-muted d-block">This helps with upload limitations by preprocessing large videos in your browser before uploading.</small>
                 </div>
             </div>
             <button id="compress-btn" class="btn btn-success">Compress File</button>
@@ -211,6 +338,7 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ffmpeg.js/0.10.0/ffmpeg.min.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             // Check if FFmpeg is installed
@@ -342,6 +470,318 @@
                 optionsSection.style.display = 'none';
                 processingSection.style.display = 'block';
                 
+                const fileExtension = currentFile.name.split('.').pop().toLowerCase();
+                const isVideo = ['mp4', 'avi', 'mov', 'mkv', 'wmv'].includes(fileExtension);
+                const fileSize = currentFile.size;
+                const CLIENT_SIDE_THRESHOLD = 100 * 1024 * 1024; // 100MB
+                const clientCompression = document.getElementById('client-side-compression').checked;
+                
+                // Check if we should do client-side preprocessing for large video files
+                if (isVideo && fileSize > CLIENT_SIDE_THRESHOLD && clientCompression) {
+                    document.getElementById('processing-message').textContent = 'Preparing video for preprocessing...';
+                    preprocessVideo(currentFile);
+                    return;
+                }
+                
+                // Check file size for chunked upload
+                const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB chunks
+                
+                if (currentFile.size > CHUNK_SIZE && isVideo) {
+                    // Process large video file with chunks
+                    processLargeFile(currentFile, CHUNK_SIZE);
+                } else {
+                    // Process smaller file normally
+                    processRegularFile();
+                }
+            }
+            
+            // Video preprocessing function
+            function preprocessVideo(videoFile) {
+                const reader = new FileReader();
+                
+                reader.onload = function(e) {
+                    const videoData = e.target.result;
+                    
+                    // Create video element to get dimensions and duration
+                    const video = document.createElement('video');
+                    video.style.display = 'none';
+                    document.body.appendChild(video);
+                    
+                    video.onloadedmetadata = function() {
+                        const originalWidth = video.videoWidth;
+                        const originalHeight = video.videoHeight;
+                        const duration = video.duration;
+                        
+                        // Calculate target width and height (reduce dimensions)
+                        const targetWidth = Math.floor(originalWidth * 0.6);
+                        const targetHeight = Math.floor(originalHeight * 0.6);
+                        
+                        document.body.removeChild(video);
+                        
+                        // Create a temporary URL for the video file
+                        const videoUrl = URL.createObjectURL(videoFile);
+                        
+                        // Create a canvas and capture at regular intervals
+                        captureFrames(videoUrl, videoFile.name, targetWidth, targetHeight, duration);
+                    };
+                    
+                    video.src = URL.createObjectURL(videoFile);
+                };
+                
+                reader.readAsArrayBuffer(videoFile);
+            }
+            
+            function captureFrames(videoUrl, filename, targetWidth, targetHeight, duration) {
+                const fps = 15; // Target frames per second
+                const chunkDuration = 4; // Process 4 seconds at a time
+                const totalFrames = Math.floor(duration * fps);
+                
+                document.getElementById('processing-message').textContent = 'Preprocessing video in browser...';
+                uploadProgress.style.width = '0%';
+                
+                // Start frame capture and processing
+                const canvas = document.createElement('canvas');
+                canvas.width = targetWidth;
+                canvas.height = targetHeight;
+                const ctx = canvas.getContext('2d');
+                
+                const video = document.createElement('video');
+                video.src = videoUrl;
+                video.muted = true;
+                
+                const frameChunks = [];
+                let currentChunk = 0;
+                const totalChunks = Math.ceil(duration / chunkDuration);
+                
+                video.onloadedmetadata = function() {
+                    video.currentTime = 0;
+                    
+                    // Process video in chunks to avoid memory issues
+                    processNextChunk();
+                };
+                
+                function processNextChunk() {
+                    if (currentChunk >= totalChunks) {
+                        // All chunks processed, create final video
+                        finalizeVideo();
+                        return;
+                    }
+                    
+                    const startTime = currentChunk * chunkDuration;
+                    const endTime = Math.min((currentChunk + 1) * chunkDuration, duration);
+                    const framesInChunk = Math.floor((endTime - startTime) * fps);
+                    
+                    const frames = [];
+                    let frameCount = 0;
+                    
+                    // Update progress
+                    const progressPercentage = (currentChunk / totalChunks) * 100;
+                    uploadProgress.style.width = progressPercentage + '%';
+                    document.getElementById('processing-message').textContent = 
+                        `Preprocessing video: ${Math.floor(progressPercentage)}% (chunk ${currentChunk+1}/${totalChunks})`;
+                    
+                    // Set video to start time of this chunk
+                    video.currentTime = startTime;
+                    
+                    // Capture frames when time updates
+                    video.ontimeupdate = function() {
+                        if (video.currentTime < startTime) return;
+                        if (video.currentTime > endTime || frameCount >= framesInChunk) {
+                            // This chunk is done
+                            video.ontimeupdate = null;
+                            frameChunks.push(frames);
+                            currentChunk++;
+                            
+                            // Process next chunk
+                            setTimeout(processNextChunk, 50);
+                            return;
+                        }
+                        
+                        // Capture frame
+                        ctx.drawImage(video, 0, 0, targetWidth, targetHeight);
+                        frames.push(canvas.toDataURL('image/jpeg', 0.7));
+                        frameCount++;
+                        
+                        // Move to next frame
+                        video.currentTime += 1/fps;
+                    };
+                    
+                    // Start playback to trigger timeupdate events
+                    video.play();
+                }
+                
+                function finalizeVideo() {
+                    // Combine all frames to create a video
+                    document.getElementById('processing-message').textContent = 'Building compressed video...';
+                    
+                    // Flatten frame chunks
+                    const allFrames = [].concat(...frameChunks);
+                    
+                    // Create a video blob from the frames using MediaRecorder API
+                    const videoElement = document.createElement('video');
+                    videoElement.muted = true;
+                    
+                    const stream = canvas.captureStream(fps);
+                    const mediaRecorder = new MediaRecorder(stream, {
+                        mimeType: 'video/webm;codecs=vp9',
+                        videoBitsPerSecond: 2000000 // 2 Mbps
+                    });
+                    
+                    const chunks = [];
+                    
+                    mediaRecorder.ondataavailable = function(e) {
+                        chunks.push(e.data);
+                    };
+                    
+                    mediaRecorder.onstop = function() {
+                        const blob = new Blob(chunks, { type: 'video/webm' });
+                        const preprocessedFile = new File([blob], filename.replace(/\.[^.]+$/, '.webm'), { 
+                            type: 'video/webm' 
+                        });
+                        
+                        // Update the current file with the preprocessed one
+                        currentFile = preprocessedFile;
+                        
+                        // Now process with the server
+                        document.getElementById('processing-message').textContent = 'Preprocessing complete. Uploading...';
+                        
+                        // Check if the preprocessed file is still large
+                        if (currentFile.size > 5 * 1024 * 1024) {
+                            processLargeFile(currentFile, 5 * 1024 * 1024);
+                        } else {
+                            processRegularFile();
+                        }
+                    };
+                    
+                    // Start recording
+                    mediaRecorder.start();
+                    
+                    // Function to draw frames sequentially
+                    let frameIndex = 0;
+                    
+                    function drawNextFrame() {
+                        if (frameIndex >= allFrames.length) {
+                            // All frames drawn, stop recording
+                            mediaRecorder.stop();
+                            return;
+                        }
+                        
+                        // Load the current frame
+                        const img = new Image();
+                        img.onload = function() {
+                            // Draw the frame
+                            ctx.drawImage(img, 0, 0);
+                            
+                            // Update progress
+                            const progress = ((frameIndex + 1) / allFrames.length) * 100;
+                            uploadProgress.style.width = progress + '%';
+                            
+                            // Schedule next frame
+                            frameIndex++;
+                            setTimeout(drawNextFrame, 1000 / fps);
+                        };
+                        img.src = allFrames[frameIndex];
+                    }
+                    
+                    // Start drawing frames
+                    drawNextFrame();
+                }
+            }
+            
+            function processLargeFile(file, chunkSize) {
+                // Generate a unique ID for this upload
+                const uploadId = Date.now().toString();
+                const totalChunks = Math.ceil(file.size / chunkSize);
+                let currentChunk = 0;
+                
+                document.getElementById('processing-message').textContent = `Preparing file for upload (0/${totalChunks})`;
+                
+                // Function to upload a single chunk
+                function uploadChunk() {
+                    const start = currentChunk * chunkSize;
+                    const end = Math.min(file.size, start + chunkSize);
+                    const chunk = file.slice(start, end);
+                    
+                    const formData = new FormData();
+                    formData.append('file', chunk, file.name);
+                    formData.append('chunk_index', currentChunk);
+                    formData.append('total_chunks', totalChunks);
+                    formData.append('upload_id', uploadId);
+                    
+                    // Add compression parameters
+                    const fileExtension = file.name.split('.').pop().toLowerCase();
+                    if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(fileExtension)) {
+                        formData.append('quality', qualitySlider.value);
+                        formData.append('resize_factor', resizeSlider.value);
+                    } else if (['mp4', 'avi', 'mov', 'mkv', 'wmv'].includes(fileExtension)) {
+                        formData.append('crf', crfSlider.value);
+                    }
+                    
+                    // Update progress display
+                    const percentComplete = ((currentChunk + 1) / totalChunks) * 100;
+                    uploadProgress.style.width = percentComplete + '%';
+                    document.getElementById('processing-message').textContent = 
+                        `Uploading chunk ${currentChunk + 1}/${totalChunks} (${percentComplete.toFixed(1)}%)`;
+                    
+                    // Send the chunk
+                    fetch('/upload-chunk', {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.error) {
+                            throw new Error(data.error);
+                        }
+                        
+                        currentChunk++;
+                        
+                        if (currentChunk < totalChunks) {
+                            // Upload next chunk
+                            uploadChunk();
+                        } else {
+                            // All chunks uploaded, start processing
+                            document.getElementById('processing-message').textContent = 'All chunks uploaded, starting processing...';
+                            
+                            // Tell server to combine and process chunks
+                            const finalizeData = new FormData();
+                            finalizeData.append('upload_id', uploadId);
+                            finalizeData.append('filename', file.name);
+                            finalizeData.append('crf', crfSlider.value);
+                            
+                            fetch('/finalize-chunks', {
+                                method: 'POST',
+                                body: finalizeData
+                            })
+                            .then(response => response.json())
+                            .then(data => {
+                                if (data.task_id) {
+                                    // Start polling for processing status
+                                    pollProcessingStatus(data.task_id, data);
+                                } else {
+                                    // Processing completed immediately
+                                    displayResults(data);
+                                }
+                            })
+                            .catch(error => {
+                                alert('Error finalizing upload: ' + error.message);
+                                processingSection.style.display = 'none';
+                                optionsSection.style.display = 'block';
+                            });
+                        }
+                    })
+                    .catch(error => {
+                        alert('Error uploading chunk: ' + error.message);
+                        processingSection.style.display = 'none';
+                        optionsSection.style.display = 'block';
+                    });
+                }
+                
+                // Start the first chunk upload
+                uploadChunk();
+            }
+            
+            function processRegularFile() {
                 const formData = new FormData();
                 formData.append('file', currentFile);
                 

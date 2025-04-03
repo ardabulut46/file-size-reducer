@@ -16,9 +16,10 @@ from apscheduler.schedulers.background import BackgroundScheduler
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['PROCESSED_FOLDER'] = 'processed'
-app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024 * 1024  # 10GB max upload size
+app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100MB max upload size (reduced for Digital Ocean App Platform)
 app.config['CLEANUP_INTERVAL'] = 10 * 60  # 10 minutes in seconds
 app.config['URGENT_CLEANUP_INTERVAL'] = 60  # 1 minute for files marked for urgent cleanup
+app.config['CHUNK_FOLDER'] = 'chunks'  # Folder for temporary chunk storage
 app.config['ALLOWED_EXTENSIONS'] = {
     'image': {'png', 'jpg', 'jpeg', 'gif', 'webp'},
     'video': {'mp4', 'avi', 'mov', 'mkv', 'wmv'},
@@ -60,11 +61,10 @@ def scheduled_cleanup():
         for filename in os.listdir(app.config['PROCESSED_FOLDER']):
             file_path = os.path.join(app.config['PROCESSED_FOLDER'], filename)
             
-            # Check if file is marked for urgent cleanup or past regular threshold
             if os.path.getmtime(file_path) < urgent_cleanup_threshold:
                 try:
                     os.remove(file_path)
-                    print(f"Scheduler: Removed urgent processed file {file_path}")
+                    print(f"Scheduler: Removed urgent file {file_path}")
                 except Exception as e:
                     print(f"Scheduler: Error removing {file_path}: {e}")
             elif os.path.getmtime(file_path) < regular_cleanup_threshold:
@@ -73,6 +73,18 @@ def scheduled_cleanup():
                     print(f"Scheduler: Removed old processed file {file_path}")
                 except Exception as e:
                     print(f"Scheduler: Error removing {file_path}: {e}")
+        
+        # Clean up chunks folder (with shorter timeout)
+        chunks_cleanup_threshold = current_time - (app.config['CLEANUP_INTERVAL'] / 2)  # Chunks expire faster
+        if os.path.exists(app.config['CHUNK_FOLDER']):
+            for upload_id in os.listdir(app.config['CHUNK_FOLDER']):
+                dir_path = os.path.join(app.config['CHUNK_FOLDER'], upload_id)
+                if os.path.isdir(dir_path) and os.path.getmtime(dir_path) < chunks_cleanup_threshold:
+                    try:
+                        shutil.rmtree(dir_path)
+                        print(f"Scheduler: Removed old chunk folder {dir_path}")
+                    except Exception as e:
+                        print(f"Scheduler: Error removing chunk folder {dir_path}: {e}")
         
         # Clean up processing_status dict
         for task_id in list(processing_status.keys()):
@@ -92,6 +104,7 @@ atexit.register(lambda: scheduler.shutdown())
 # Ensure upload and processed directories exist
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs(app.config['PROCESSED_FOLDER'], exist_ok=True)
+os.makedirs(app.config['CHUNK_FOLDER'], exist_ok=True)
 
 def is_ffmpeg_installed():
     """Check if FFmpeg is installed and accessible in the PATH."""
@@ -665,6 +678,177 @@ def delete_files():
 def check_ffmpeg():
     """Check if FFmpeg is installed"""
     return jsonify({'ffmpeg_installed': is_ffmpeg_installed()})
+
+@app.route('/upload-chunk', methods=['POST'])
+def upload_chunk():
+    """Handle uploading a single chunk of a file"""
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file part'}), 400
+    
+    chunk = request.files['file']
+    
+    if chunk.filename == '':
+        return jsonify({'error': 'No selected file'}), 400
+        
+    # Get chunk metadata
+    chunk_index = int(request.form.get('chunk_index', 0))
+    total_chunks = int(request.form.get('total_chunks', 1))
+    upload_id = request.form.get('upload_id', '')
+    
+    if not upload_id:
+        return jsonify({'error': 'Missing upload ID'}), 400
+    
+    # Create directory for this upload if it doesn't exist
+    upload_dir = os.path.join(app.config['CHUNK_FOLDER'], upload_id)
+    os.makedirs(upload_dir, exist_ok=True)
+    
+    # Save the chunk with its index in the filename
+    chunk_filename = f"{chunk_index:08d}"
+    chunk_path = os.path.join(upload_dir, chunk_filename)
+    chunk.save(chunk_path)
+    
+    # Return success
+    return jsonify({
+        'message': f'Chunk {chunk_index + 1}/{total_chunks} uploaded successfully',
+        'chunk_index': chunk_index,
+        'total_chunks': total_chunks,
+        'upload_id': upload_id
+    })
+
+@app.route('/finalize-chunks', methods=['POST'])
+def finalize_chunks():
+    """Combine chunks into a single file and process it"""
+    upload_id = request.form.get('upload_id', '')
+    filename = request.form.get('filename', '')
+    
+    if not upload_id or not filename:
+        return jsonify({'error': 'Missing upload ID or filename'}), 400
+    
+    # Validate file type
+    if not allowed_file(filename):
+        return jsonify({'error': 'File type not allowed'}), 400
+    
+    # Directory containing chunks
+    chunks_dir = os.path.join(app.config['CHUNK_FOLDER'], upload_id)
+    
+    if not os.path.exists(chunks_dir):
+        return jsonify({'error': 'No chunks found for this upload ID'}), 404
+    
+    # Create a unique filename for the combined file
+    base_name = os.path.splitext(secure_filename(filename))[0]
+    extension = os.path.splitext(secure_filename(filename))[1]
+    unique_filename = f"{base_name}_{str(uuid.uuid4())[:8]}{extension}"
+    combined_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
+    
+    # Combine chunks
+    try:
+        with open(combined_path, 'wb') as output_file:
+            # Get all chunk files and sort them by number
+            chunks = sorted([f for f in os.listdir(chunks_dir) if os.path.isfile(os.path.join(chunks_dir, f))])
+            
+            for chunk_file in chunks:
+                chunk_path = os.path.join(chunks_dir, chunk_file)
+                with open(chunk_path, 'rb') as chunk:
+                    output_file.write(chunk.read())
+                
+                # Delete chunk after combining
+                try:
+                    os.remove(chunk_path)
+                except:
+                    pass
+        
+        # Remove chunks directory
+        try:
+            shutil.rmtree(chunks_dir)
+        except:
+            pass
+            
+        # Process the combined file
+        file_type = get_file_type(filename)
+        original_size = os.path.getsize(combined_path)
+        processed_filename = f"reduced_{unique_filename}"
+        processed_path = os.path.join(app.config['PROCESSED_FOLDER'], processed_filename)
+        
+        if file_type == 'video':
+            # Get compression parameter
+            crf = int(request.form.get('crf', 28))
+            reduced_size, processing_success, task_id = process_video(combined_path, processed_path, crf)
+            
+            if task_id:
+                # Return task ID for progress tracking
+                return jsonify({
+                    'message': 'Video processing started',
+                    'original_name': filename,
+                    'processed_name': processed_filename,
+                    'original_size': original_size,
+                    'task_id': task_id,
+                    'processing_success': processing_success,
+                    'processing_completed': False
+                })
+            else:
+                # Processing completed immediately or failed
+                reduced_size = os.path.getsize(processed_path)
+                size_reduction = original_size - reduced_size
+                percentage_reduction = (size_reduction / original_size) * 100 if original_size > 0 else 0
+                
+                response_data = {
+                    'message': 'File copied (processing not available)' if not processing_success else 'File processed successfully',
+                    'original_name': filename,
+                    'processed_name': processed_filename,
+                    'original_size': original_size,
+                    'reduced_size': reduced_size,
+                    'size_reduction': size_reduction,
+                    'percentage_reduction': percentage_reduction,
+                    'processing_success': processing_success,
+                    'processing_completed': True
+                }
+                
+                if not processing_success:
+                    response_data['warning'] = 'FFmpeg is not installed. Please install FFmpeg to enable video compression.'
+                
+                return jsonify(response_data)
+                
+        elif file_type == 'image':
+            # Process image
+            quality = int(request.form.get('quality', 70))
+            resize_factor = float(request.form.get('resize_factor', 0.8))
+            reduced_size = process_image(combined_path, processed_path, quality, resize_factor)
+            
+            size_reduction = original_size - reduced_size
+            percentage_reduction = (size_reduction / original_size) * 100 if original_size > 0 else 0
+            
+            return jsonify({
+                'message': 'File processed successfully',
+                'original_name': filename,
+                'processed_name': processed_filename,
+                'original_size': original_size,
+                'reduced_size': reduced_size,
+                'size_reduction': size_reduction,
+                'percentage_reduction': percentage_reduction,
+                'processing_success': True,
+                'processing_completed': True
+            })
+        else:
+            # Just copy other file types
+            shutil.copy2(combined_path, processed_path)
+            reduced_size = os.path.getsize(processed_path)
+            size_reduction = original_size - reduced_size
+            percentage_reduction = (size_reduction / original_size) * 100 if original_size > 0 else 0
+            
+            return jsonify({
+                'message': 'File copied (no compression available for this file type)',
+                'original_name': filename,
+                'processed_name': processed_filename,
+                'original_size': original_size,
+                'reduced_size': reduced_size,
+                'size_reduction': size_reduction,
+                'percentage_reduction': percentage_reduction,
+                'processing_success': True,
+                'processing_completed': True
+            })
+            
+    except Exception as e:
+        return jsonify({'error': f'Error combining chunks: {str(e)}'}), 500
 
 if __name__ == '__main__':
     # Get port from environment variable or use 8080 as default
