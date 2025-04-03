@@ -4,8 +4,8 @@ services:
     github:
       branch: main
       deploy_on_push: true
-    build_command: pip install -r requirements.txt
-    run_command: gunicorn app:app
+    build_command: apt-get update && apt-get install -y ffmpeg libsm6 libxext6 && pip install -r requirements.txt && mkdir -p uploads processed
+    run_command: gunicorn wsgi:app
     envs:
       - key: PYTHONUNBUFFERED
         value: "1"

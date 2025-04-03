@@ -6,7 +6,7 @@ spec:
       repo_clone_url: ${_self.repository_url}
       branch: ${_self.git_branch}
     build_command: pip install -r requirements.txt && mkdir -p uploads processed
-    run_command: gunicorn app:app
+    run_command: gunicorn wsgi:app
     envs:
     - key: PYTHONUNBUFFERED
       value: "1"
