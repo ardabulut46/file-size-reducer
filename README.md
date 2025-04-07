@@ -1,6 +1,6 @@
 # File Size Reducer
 
-A powerful and easy-to-use web application for reducing the size of various file types including images (JPG, PNG, GIF), videos (MP4, AVI, MOV), and documents.
+A powerful and easy-to-use web application for reducing the size of various file types including images (JPG, PNG, GIF), videos (MP4, AVI, MOV), and documents. No PDF for now. 
 
 ## Features
 
