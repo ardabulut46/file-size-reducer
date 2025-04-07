@@ -18,7 +18,7 @@ app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['PROCESSED_FOLDER'] = 'processed'
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024 * 1024  # 10GB max upload size
 app.config['CLEANUP_INTERVAL'] = 10 * 60  # 10 minutes in seconds
-app.config['URGENT_CLEANUP_INTERVAL'] = 60  # 1 minute for files marked for urgent cleanup
+app.config['URGENT_CLEANUP_INTERVAL'] = 300  # 5 minutes for files marked for urgent cleanup (changed from 60 seconds)
 app.config['ALLOWED_EXTENSIONS'] = {
     'image': {'png', 'jpg', 'jpeg', 'gif', 'webp'},
     'video': {'mp4', 'avi', 'mov', 'mkv', 'wmv'},
@@ -47,12 +47,18 @@ def scheduled_cleanup():
                 try:
                     os.remove(file_path)
                     print(f"Scheduler: Removed urgent file {file_path}")
+                except PermissionError as e:
+                    # File is in use, ignore and try again later
+                    print(f"Scheduler: File {file_path} is in use, skipping")
                 except Exception as e:
                     print(f"Scheduler: Error removing {file_path}: {e}")
             elif os.path.getmtime(file_path) < regular_cleanup_threshold:
                 try:
                     os.remove(file_path)
                     print(f"Scheduler: Removed old upload {file_path}")
+                except PermissionError as e:
+                    # File is in use, ignore and try again later
+                    print(f"Scheduler: File {file_path} is in use, skipping")
                 except Exception as e:
                     print(f"Scheduler: Error removing {file_path}: {e}")
         
@@ -65,12 +71,18 @@ def scheduled_cleanup():
                 try:
                     os.remove(file_path)
                     print(f"Scheduler: Removed urgent processed file {file_path}")
+                except PermissionError as e:
+                    # File is in use, ignore and try again later
+                    print(f"Scheduler: File {file_path} is in use, skipping")
                 except Exception as e:
                     print(f"Scheduler: Error removing {file_path}: {e}")
             elif os.path.getmtime(file_path) < regular_cleanup_threshold:
                 try:
                     os.remove(file_path)
                     print(f"Scheduler: Removed old processed file {file_path}")
+                except PermissionError as e:
+                    # File is in use, ignore and try again later
+                    print(f"Scheduler: File {file_path} is in use, skipping")
                 except Exception as e:
                     print(f"Scheduler: Error removing {file_path}: {e}")
         
@@ -489,7 +501,12 @@ def download_file(filename):
     
     # Check if the file exists
     if not os.path.exists(processed_path):
-        return jsonify({'error': 'File not found'}), 404
+        print(f"Error: File not found at {processed_path}")
+        return jsonify({'error': 'File not found or has been deleted. Please try processing the file again.'}), 404
+    
+    # Log that we're starting a download
+    file_size = os.path.getsize(processed_path) if os.path.exists(processed_path) else 0
+    print(f"Starting download for file: {filename}, size: {file_size} bytes")
     
     # Since Flask's call_on_close is not reliable in all environments,
     # we'll use a combination of approaches:
@@ -511,19 +528,49 @@ def download_file(filename):
     # 2. Schedule an immediate background cleanup with a small delay
     try:
         def delayed_cleanup():
-            # Wait a few seconds to let the download start
-            time.sleep(5)
+            # Wait longer to let the download start
+            time.sleep(30)  # Increased from 5 seconds to 30 seconds
             
             try:
-                # Try to delete the processed file
+                # Check if the file has been accessed recently before deleting
                 if os.path.exists(processed_path):
-                    os.remove(processed_path)
-                    print(f"Background thread: Deleted processed file {processed_path}")
+                    try:
+                        # Try opening the file to see if it's in use
+                        with open(processed_path, 'rb') as test_file:
+                            # File is not in use if we can open it
+                            pass
+                        
+                        # Get the last access time of the file
+                        last_access = os.path.getatime(processed_path)
+                        current_time = time.time()
+                        # If file hasn't been accessed in last 30 seconds, it's safe to delete
+                        if current_time - last_access > 30:
+                            os.remove(processed_path)
+                            print(f"Background thread: Deleted processed file {processed_path}")
+                        else:
+                            print(f"Background thread: File {processed_path} was recently accessed, skipping deletion")
+                    except PermissionError:
+                        # File is in use (likely being downloaded)
+                        print(f"Background thread: File {processed_path} is in use, skipping deletion")
                 
-                # Try to delete the original file
+                # Do the same for the original file
                 if os.path.exists(original_path):
-                    os.remove(original_path)
-                    print(f"Background thread: Deleted original file {original_path}")
+                    try:
+                        # Try opening the file to see if it's in use
+                        with open(original_path, 'rb') as test_file:
+                            # File is not in use if we can open it
+                            pass
+                        
+                        last_access = os.path.getatime(original_path)
+                        current_time = time.time()
+                        if current_time - last_access > 30:
+                            os.remove(original_path)
+                            print(f"Background thread: Deleted original file {original_path}")
+                        else:
+                            print(f"Background thread: File {original_path} was recently accessed, skipping deletion")
+                    except PermissionError:
+                        # File is in use
+                        print(f"Background thread: File {original_path} is in use, skipping deletion")
             except Exception as e:
                 print(f"Background thread: Error deleting files: {e}")
         
@@ -565,6 +612,7 @@ def cleanup():
     cleanup_threshold = current_time - app.config['CLEANUP_INTERVAL']
     
     removed_files = []
+    skipped_files = []
     
     # Clean up uploads folder
     for filename in os.listdir(app.config['UPLOAD_FOLDER']):
@@ -573,6 +621,10 @@ def cleanup():
             try:
                 os.remove(file_path)
                 removed_files.append(file_path)
+            except PermissionError:
+                # File is in use, skip it
+                skipped_files.append(file_path)
+                print(f"Cleanup: File {file_path} is in use, skipping")
             except Exception as e:
                 print(f"Error removing {file_path}: {e}")
     
@@ -583,6 +635,10 @@ def cleanup():
             try:
                 os.remove(file_path)
                 removed_files.append(file_path)
+            except PermissionError:
+                # File is in use, skip it
+                skipped_files.append(file_path)
+                print(f"Cleanup: File {file_path} is in use, skipping")
             except Exception as e:
                 print(f"Error removing {file_path}: {e}")
     
@@ -595,13 +651,15 @@ def cleanup():
     
     return jsonify({
         'message': 'Cleanup completed', 
-        'files_removed': len(removed_files)
+        'files_removed': len(removed_files),
+        'files_skipped': len(skipped_files)
     })
 
 @app.route('/cleanup-all', methods=['POST'])
 def cleanup_all():
     """Forcibly clean up all temporary files"""
     removed_files = []
+    skipped_files = []
     
     # Clean up uploads folder
     for filename in os.listdir(app.config['UPLOAD_FOLDER']):
@@ -609,6 +667,10 @@ def cleanup_all():
         try:
             os.remove(file_path)
             removed_files.append(file_path)
+        except PermissionError:
+            # File is in use, skip it
+            skipped_files.append(file_path)
+            print(f"Cleanup-all: File {file_path} is in use, skipping")
         except Exception as e:
             print(f"Error removing {file_path}: {e}")
     
@@ -618,12 +680,17 @@ def cleanup_all():
         try:
             os.remove(file_path)
             removed_files.append(file_path)
+        except PermissionError:
+            # File is in use, skip it
+            skipped_files.append(file_path)
+            print(f"Cleanup-all: File {file_path} is in use, skipping")
         except Exception as e:
             print(f"Error removing {file_path}: {e}")
     
     return jsonify({
         'message': 'All files cleaned up',
         'files_removed': len(removed_files),
+        'files_skipped': len(skipped_files),
         'removed_files': removed_files
     })
 
@@ -636,6 +703,7 @@ def delete_files():
     
     original_filename = processed_filename.replace('reduced_', '')
     removed_files = []
+    skipped_files = []
     
     # Delete processed file
     processed_path = os.path.join(app.config['PROCESSED_FOLDER'], processed_filename)
@@ -643,6 +711,10 @@ def delete_files():
         try:
             os.remove(processed_path)
             removed_files.append(processed_path)
+        except PermissionError:
+            # File is in use, skip it
+            skipped_files.append(processed_path)
+            print(f"Delete-files: File {processed_path} is in use, skipping")
         except Exception as e:
             print(f"Error removing {processed_path}: {e}")
     
@@ -652,12 +724,17 @@ def delete_files():
         try:
             os.remove(original_path)
             removed_files.append(original_path)
+        except PermissionError:
+            # File is in use, skip it
+            skipped_files.append(original_path)
+            print(f"Delete-files: File {original_path} is in use, skipping")
         except Exception as e:
             print(f"Error removing {original_path}: {e}")
     
     return jsonify({
         'message': 'Files deleted successfully',
         'files_removed': len(removed_files),
+        'files_skipped': len(skipped_files),
         'removed_files': removed_files
     })
 

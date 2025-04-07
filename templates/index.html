@@ -477,11 +477,32 @@
                 
                 // Add download completion handler to reset the UI after download
                 if (!downloadBtn.hasClickListener) {
-                    downloadBtn.addEventListener('click', function() {
-                        // After a delay to allow download to start, reset the UI
-                        setTimeout(() => {
-                            resetUI();
-                        }, 1500);
+                    downloadBtn.addEventListener('click', function(event) {
+                        // Check if the file is available first
+                        fetch(downloadBtn.href)
+                            .then(response => {
+                                if (!response.ok) {
+                                    // If 404 or other error, prevent default action and show error
+                                    event.preventDefault();
+                                    if (response.status === 404) {
+                                        alert("The file is no longer available for download. It may have been automatically deleted. Please try processing your file again.");
+                                    } else {
+                                        alert("There was an error downloading the file. Please try again.");
+                                    }
+                                    return;
+                                }
+                                
+                                // After a delay to allow download to start, reset the UI
+                                setTimeout(() => {
+                                    resetUI();
+                                }, 1500);
+                            })
+                            .catch(error => {
+                                // Handle network errors
+                                event.preventDefault();
+                                alert("Network error while trying to download. Please try again.");
+                                console.error("Download error:", error);
+                            });
                     });
                     downloadBtn.hasClickListener = true;
                 }
