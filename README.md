@@ -79,27 +79,40 @@ Open your browser and navigate to [http://localhost:5000](http://localhost:5000)
 
 ## How It Works
 
+### Application Architecture
+- Flask-based web application with a responsive front-end
+- RESTful API endpoints handle file uploads, processing, and downloads
+- Asynchronous processing for better user experience
+- Real-time progress updates using WebSockets
+
 ### Image Compression
 - Uses OpenCV for high-performance image processing
-- Resizes dimensions based on the resize factor
-- Reduces quality while maintaining visual appearance
-- Optimizes encoding for minimal file size
+- Applies intelligent resizing based on user-defined parameters
+- Employs quality reduction algorithms that maintain visual fidelity
+- Optimizes metadata and color spaces for minimal file size
+- Supports format conversion for optimal compression
 
 ### Video Compression
-- Uses FFmpeg with CRF settings to compress video
-- Maintains aspect ratio and frame rate
-- Balances quality and file size
+- Leverages FFmpeg with customized encoding parameters
+- Uses advanced CRF (Constant Rate Factor) settings for optimal quality/size ratio
+- Maintains aspect ratio, frame rate, and audio quality
+- Implements multi-pass encoding for complex videos when needed
+- Preserves important metadata while stripping unnecessary information
 
-### File Storage
+### Document Compression
+- Implements PDF optimization techniques
+- Reduces embedded image quality
+- Removes redundant information and unnecessary metadata
+
+### File Storage & Security
 - Uploaded files are stored temporarily in the 'uploads' directory
 - Processed files are stored in the 'processed' directory
-- Files are automatically deleted immediately after download using multiple reliable methods:
-  - A background thread that removes files a few seconds after download begins
-  - Files are marked for urgent cleanup to be handled by the cleanup scheduler
-  - Backup mechanisms to ensure deletion even in case of connection issues
-- A background scheduler runs every minute to ensure no files remain on the server
-- Regular files are cleaned up after 10 minutes, urgent files after 1 minute
-- No persistent storage of user files to maintain privacy and save disk space
+- Robust file cleanup system:
+  - Files are deleted immediately after download via multiple mechanisms
+  - Background cleanup scheduler runs periodically
+  - Regular files are removed after 10 minutes, urgent files after 1 minute
+- Zero persistent storage of user files ensures privacy and security
+- Unique file identifiers prevent collision and unauthorized access
 
 ## Contributing
 
@@ -111,36 +124,34 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## Docker Deployment
 
-This application can be easily deployed using Docker:
-
-### Local Development
+You can run this application using Docker without downloading the repository:
 
 ```bash
-# Build and run with docker-compose
+# Pull and run directly from Docker Hub
+docker run -d -p 5000:5000 --name file-reducer ardabulut46/file-size-reducer:latest
+```
+
+### Custom Configuration with Docker Compose
+
+Create a `docker-compose.yml` file:
+
+```yaml
+version: '3'
+services:
+  file-reducer:
+    image: ardabulut46/file-size-reducer:latest
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./data/uploads:/app/uploads
+      - ./data/processed:/app/processed
+    restart: unless-stopped
+```
+
+Then run:
+
+```bash
 docker-compose up -d
 ```
 
-### DigitalOcean Deployment
-
-1. Push your code to GitHub
-2. Create a new DigitalOcean Droplet with Docker pre-installed
-3. SSH into your Droplet
-4. Clone your repository
-5. Run the application with Docker:
-
-```bash
-# Clone the repository
-git clone <your-repo-url>
-cd <your-repo-directory>
-
-# Build and run the Docker container
-docker build -t file-size-reducer .
-docker run -d -p 80:8080 -v $(pwd)/uploads:/app/uploads -v $(pwd)/processed:/app/processed --name file-reducer file-size-reducer
-```
-
-Alternatively, use DigitalOcean's App Platform with the Dockerfile-based deployment option:
-
-1. Select your repository
-2. Choose "Dockerfile" as the deployment method
-3. Configure the HTTP port as 8080
-4. Deploy the application 
+Access the application at [http://localhost:5000](http://localhost:5000) 
