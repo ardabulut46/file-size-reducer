@@ -1,157 +1,64 @@
 # File Size Reducer
 
-A powerful and easy-to-use web application for reducing the size of various file types including images (JPG, PNG, GIF), videos (MP4, AVI, MOV), and documents. No PDF for now. 
+A Flask web application for reducing the size of various file types. This application can process images, videos, and documents to reduce their file size while maintaining reasonable quality.
 
 ## Features
 
-- **Multi-file type support**: Reduces the size of images, videos, and documents
-- **Large file handling**: Can process files up to 10GB
-- **Drag & Drop interface**: Easy-to-use modern web interface
-- **Customizable compression**: Adjust quality and size settings for optimal results
-- **Progress tracking**: Real-time progress indicators for uploads and processing
-- **Comparison visualization**: See before and after file sizes with visual comparison
-- **Automatic file cleanup**: Files are automatically deleted after download or after 15 minutes
+- Reduce image sizes through compression and resizing
+- Compress videos with FFmpeg (if installed)
+- Automatic cleanup of temporary files
+- Progress tracking for video processing
+- Clean separation of concerns through modular architecture
+
+## Project Structure
+
+The application has been organized into a modular structure for better maintainability:
+
+```
+file-size-reducer/
+├── app.py                  # Main application entry point
+├── config.py               # Configuration settings
+├── scheduler.py            # Background task scheduler
+├── services/               # Core business logic
+│   ├── __init__.py
+│   ├── processor.py        # File processing logic
+│   └── file_manager.py     # File handling operations
+├── utils/                  # Helper functions
+│   ├── __init__.py
+│   ├── file_utils.py       # File utility functions
+│   └── cleanup_utils.py    # Cleanup utility functions
+├── routes/                 # API endpoints
+│   ├── __init__.py
+│   └── file_routes.py      # Routes for file operations
+└── templates/              # HTML templates
+    └── index.html          # Main page template
+```
 
 ## Requirements
 
-- Python 3.6 or higher
-- FFmpeg installed on your system (for video compression)
+- Python 3.6+
+- Flask
+- OpenCV (for image processing)
+- FFmpeg (optional, for video processing)
+- APScheduler (for background tasks)
 
 ## Installation
 
-1. **Clone the repository**
-
-```bash
-git clone https://github.com/ardabulut46/file-size-reducer.git
-cd file-size-reducer
-```
-
-2. **Install the Python dependencies**
-
-```bash
-pip install -r requirements.txt
-```
-
-3. **Install FFmpeg** (if not already installed)
-
-For Windows:
-- Download FFmpeg from [https://ffmpeg.org/download.html](https://ffmpeg.org/download.html)
-- Add FFmpeg to your system PATH
-
-For macOS:
-```bash
-brew install ffmpeg
-```
-
-For Ubuntu/Debian:
-```bash
-sudo apt update
-sudo apt install ffmpeg
-```
+1. Clone the repository
+2. Install dependencies with `pip install -r requirements.txt`
+3. Run the application with `python app.py`
 
 ## Usage
 
-1. **Start the application**
+Open your browser and navigate to `http://localhost:8080` to access the application.
 
-```bash
-python app.py
-```
+## Code Organization
 
-2. **Access the web interface**
+- **app.py**: Main Flask application setup and server startup
+- **config.py**: Configuration settings for the application
+- **scheduler.py**: Background task scheduler for file cleanup
+- **services/**: Core business logic for file processing
+- **utils/**: Helper functions and utilities
+- **routes/**: API endpoint definitions
 
-Open your browser and navigate to [http://localhost:5000](http://localhost:5000)
-
-3. **Reduce file size**
-
-- Drag and drop a file into the upload area or click "Select File"
-- Adjust compression options based on the file type
-- Click "Compress File" to start the process
-- Download the reduced file when processing is complete
-
-## Compression Options
-
-### Images
-- **Quality**: Adjust the quality percentage (lower values = smaller files)
-- **Resize Factor**: Scale the image dimensions (smaller values = smaller files)
-
-### Videos
-- **CRF (Constant Rate Factor)**: Controls the quality/size balance (higher values = smaller files)
-
-## How It Works
-
-### Application Architecture
-- Flask-based web application with a responsive front-end
-- RESTful API endpoints handle file uploads, processing, and downloads
-- Asynchronous processing for better user experience
-- Real-time progress updates using WebSockets
-
-### Image Compression
-- Uses OpenCV for high-performance image processing
-- Applies intelligent resizing based on user-defined parameters
-- Employs quality reduction algorithms that maintain visual fidelity
-- Optimizes metadata and color spaces for minimal file size
-- Supports format conversion for optimal compression
-
-### Video Compression
-- Leverages FFmpeg with customized encoding parameters
-- Uses advanced CRF (Constant Rate Factor) settings for optimal quality/size ratio
-- Maintains aspect ratio, frame rate, and audio quality
-- Implements multi-pass encoding for complex videos when needed
-- Preserves important metadata while stripping unnecessary information
-
-### Document Compression
-- Implements PDF optimization techniques
-- Reduces embedded image quality
-- Removes redundant information and unnecessary metadata
-
-### File Storage & Security
-- Uploaded files are stored temporarily in the 'uploads' directory
-- Processed files are stored in the 'processed' directory
-- Robust file cleanup system:
-  - Files are deleted immediately after download via multiple mechanisms
-  - Background cleanup scheduler runs periodically
-  - Regular files are removed after 10 minutes, urgent files after 1 minute
-- Zero persistent storage of user files ensures privacy and security
-- Unique file identifiers prevent collision and unauthorized access
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Docker Deployment
-
-You can run this application using Docker without downloading the repository:
-
-```bash
-# Pull and run directly from Docker Hub
-docker run -d -p 5000:5000 --name file-reducer ardabulut46/file-size-reducer:latest
-```
-
-### Custom Configuration with Docker Compose
-
-Create a `docker-compose.yml` file:
-
-```yaml
-version: '3'
-services:
-  file-reducer:
-    image: ardabulut46/file-size-reducer:latest
-    ports:
-      - "5000:5000"
-    volumes:
-      - ./data/uploads:/app/uploads
-      - ./data/processed:/app/processed
-    restart: unless-stopped
-```
-
-Then run:
-
-```bash
-docker-compose up -d
-```
-
-Access the application at [http://localhost:5000](http://localhost:5000) 
+All functions include documentation in both English and Turkish. 
