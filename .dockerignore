@@ -1,0 +1,11 @@
+# Don't copy these into Docker image
+uploads/*
+processed/*
+__pycache__
+*.pyc
+.git
+.gitignore
+README.md
+LICENSE
+.DS_Store
+.env

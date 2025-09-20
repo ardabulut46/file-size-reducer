@@ -1,0 +1,12 @@
+# docker-compose.yml
+services:
+  app:
+    build: .
+    container_name: file-reducer-app
+    restart: unless-stopped
+    command: gunicorn --bind 0.0.0.0:8080 --workers 3 --timeout 600 wsgi:app
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./uploads:/app/uploads
+      - ./processed:/app/processed

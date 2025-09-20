@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Size Reducer</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .main-container {
+            max-width: 800px;
+            margin: 2rem auto;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
+            background-color: white;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        .header h1 {
+            color: #3949ab;
+            font-weight: 600;
+        }
+        .upload-container {
+            border: 2px dashed #d1d5db;
+            border-radius: 8px;
+            padding: 3rem;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            background-color: #f9fafc;
+        }
+        .upload-container:hover {
+            border-color: #3949ab;
+            background-color: #f0f4ff;
+        }
+        .upload-icon {
+            font-size: 3rem;
+            color: #3949ab;
+            margin-bottom: 1rem;
+        }
+        #file-info {
+            margin-top: 1.5rem;
+            display: none;
+        }
+        .progress {
+            height: 12px;
+            border-radius: 6px;
+            margin: 1rem 0;
+        }
+        .options-section {
+            margin: 1.5rem 0;
+            padding: 1rem;
+            border-radius: 8px;
+            background-color: #f0f4ff;
+        }
+        .result-section {
+            padding: 1.5rem;
+            border-radius: 8px;
+            background-color: #e8f5e9;
+            margin-top: 2rem;
+            display: none;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 2rem;
+            color: #6c757d;
+            font-size: 0.9rem;
+        }
+        .file-type-icon {
+            font-size: 2rem;
+            margin-right: 1rem;
+        }
+        .comparison-bar {
+            display: flex;
+            align-items: center;
+            margin: 1rem 0;
+        }
+        .size-label {
+            width: 120px;
+            text-align: right;
+            margin-right: 1rem;
+        }
+        .size-bar {
+            flex-grow: 1;
+            height: 24px;
+            border-radius: 4px;
+            position: relative;
+        }
+        .original-bar {
+            background-color: #e0e0e0;
+            width: 100%;
+            height: 100%;
+        }
+        .reduced-bar {
+            background-color: #4caf50;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container main-container">
+        <div class="header">
+            <h1>File Size Reducer</h1>
+            <p class="lead">Reduce the size of your images and videos with ease</p>
+            <div id="ffmpeg-status-alert" class="alert alert-warning mt-3" style="display: none;">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                <span>FFmpeg is not installed. Video compression will not be available. <a href="https://ffmpeg.org/download.html" target="_blank">Install FFmpeg</a> to enable video compression.</span>
+            </div>
+        </div>
+
+        <div class="upload-container" id="drop-area">
+            <i class="fas fa-cloud-upload-alt upload-icon"></i>
+            <h4>Drag & Drop your file here</h4>
+            <p>or</p>
+            <input type="file" id="file-input" class="d-none">
+            <button class="btn btn-primary" id="select-file-btn">Select File</button>
+        </div>
+
+        <div id="file-info" class="mt-4">
+            <div class="d-flex align-items-center">
+                <i id="file-icon" class="far fa-file file-type-icon"></i>
+                <div>
+                    <h5 id="file-name">filename.jpg</h5>
+                    <p id="file-size" class="text-muted">10.5 MB</p>
+                </div>
+            </div>
+            <div class="progress">
+                <div id="upload-progress" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+            </div>
+        </div>
+
+        <div id="options-section" class="options-section mt-4" style="display: none;">
+            <h5>Compression Options</h5>
+            <div id="image-options" style="display: none;">
+                <div class="mb-3">
+                    <label for="quality-slider" class="form-label">Quality: <span id="quality-value">100</span>%</label>
+                    <input type="range" class="form-range" id="quality-slider" min="10" max="100" value="100">
+                </div>
+                <div class="mb-3">
+                    <label for="resize-slider" class="form-label">Resize Factor: <span id="resize-value">1</span>x</label>
+                    <input type="range" class="form-range" id="resize-slider" min="0.1" max="1" step="0.1" value="1">
+                </div>
+            </div>
+            <div id="video-options" style="display: none;">
+                <div class="mb-3">
+                    <label for="crf-slider" class="form-label">Compression Quality: <span id="crf-value">28</span> (Lower is better quality)</label>
+                    <input type="range" class="form-range" id="crf-slider" min="18" max="38" value="28">
+                </div>
+            </div>
+            <button id="compress-btn" class="btn btn-success">Compress File</button>
+        </div>
+
+        <div id="processing-section" class="mt-4 text-center" style="display: none;">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Processing...</span>
+            </div>
+            <p class="mt-2" id="processing-message">Processing your file... This may take a few minutes for large files.</p>
+            <div class="progress mt-3" style="height: 20px;">
+                <div id="processing-progress-bar" class="progress-bar bg-success" role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+            </div>
+        </div>
+
+        <div id="result-section" class="result-section">
+            <h5 class="mb-3">Compression Complete!</h5>
+            <div class="comparison-bar">
+                <span class="size-label">Original:</span>
+                <div class="size-bar">
+                    <div class="original-bar"></div>
+                </div>
+                <span id="original-size-display" class="ms-2">10.5 MB</span>
+            </div>
+            <div class="comparison-bar">
+                <span class="size-label">Reduced:</span>
+                <div class="size-bar">
+                    <div class="original-bar"></div>
+                    <div id="reduced-bar" class="reduced-bar" style="width: 40%;"></div>
+                </div>
+                <span id="reduced-size-display" class="ms-2">4.2 MB</span>
+            </div>
+            <div class="text-center mt-4">
+                <h6>You saved <span id="savings-percentage">60</span>% (<span id="savings-size">6.3 MB</span>)</h6>
+                <div class="action-buttons mt-3">
+                    <a id="download-btn" href="#" class="btn btn-primary btn-lg">
+                        <i class="fas fa-download me-2"></i>Download File
+                    </a>
+                </div>
+                <button id="start-over-btn" class="btn btn-outline-secondary mt-3">Start Over</button>
+            </div>
+        </div>
+
+        <div class="footer mt-4">
+            <p>File Size Reducer | Supports JPG, PNG, MP4, and more</p>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Check if FFmpeg is installed
+            fetch('/check-ffmpeg')
+                .then(response => response.json())
+                .then(data => {
+                    if (!data.ffmpeg_installed) {
+                        document.getElementById('ffmpeg-status-alert').style.display = 'block';
+                    }
+                })
+                .catch(error => console.error('Error checking FFmpeg:', error));
+                
+            const dropArea = document.getElementById('drop-area');
+            const fileInput = document.getElementById('file-input');
+            const selectFileBtn = document.getElementById('select-file-btn');
+            const fileInfo = document.getElementById('file-info');
+            const fileName = document.getElementById('file-name');
+            const fileSize = document.getElementById('file-size');
+            const fileIcon = document.getElementById('file-icon');
+            const optionsSection = document.getElementById('options-section');
+            const imageOptions = document.getElementById('image-options');
+            const videoOptions = document.getElementById('video-options');
+            const compressBtn = document.getElementById('compress-btn');
+            const processingSection = document.getElementById('processing-section');
+            const resultSection = document.getElementById('result-section');
+            const downloadBtn = document.getElementById('download-btn');
+            const uploadProgress = document.getElementById('upload-progress');
+            const startOverBtn = document.getElementById('start-over-btn');
+            
+            // Quality sliders
+            const qualitySlider = document.getElementById('quality-slider');
+            const qualityValue = document.getElementById('quality-value');
+            const resizeSlider = document.getElementById('resize-slider');
+            const resizeValue = document.getElementById('resize-value');
+            const crfSlider = document.getElementById('crf-slider');
+            const crfValue = document.getElementById('crf-value');
+            
+            // Result displays
+            const originalSizeDisplay = document.getElementById('original-size-display');
+            const reducedSizeDisplay = document.getElementById('reduced-size-display');
+            const savingsPercentage = document.getElementById('savings-percentage');
+            const savingsSize = document.getElementById('savings-size');
+            const reducedBar = document.getElementById('reduced-bar');
+            
+            let currentFile = null;
+            
+            // --- Event Listeners ---
+            selectFileBtn.addEventListener('click', () => fileInput.click());
+            fileInput.addEventListener('change', handleFileSelect);
+            compressBtn.addEventListener('click', processFile);
+            startOverBtn.addEventListener('click', resetUI);
+            
+            qualitySlider.addEventListener('input', () => qualityValue.textContent = qualitySlider.value);
+            resizeSlider.addEventListener('input', () => resizeValue.textContent = resizeSlider.value);
+            crfSlider.addEventListener('input', () => crfValue.textContent = crfSlider.value);
+
+            // Drag and drop events
+            dropArea.addEventListener('dragover', (e) => { e.preventDefault(); dropArea.classList.add('bg-light'); });
+            dropArea.addEventListener('dragleave', () => dropArea.classList.remove('bg-light'));
+            dropArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropArea.classList.remove('bg-light');
+                if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+            });
+
+            function handleFileSelect(e) {
+                if (e.target.files.length) handleFile(e.target.files[0]);
+            }
+            
+            function handleFile(file) {
+                currentFile = file;
+                fileInfo.style.display = 'block';
+                fileName.textContent = file.name;
+                fileSize.textContent = formatFileSize(file.size);
+                
+                const fileExtension = file.name.split('.').pop().toLowerCase();
+                if (['jpg', 'jpeg', 'png', 'webp'].includes(fileExtension)) {
+                    fileIcon.className = 'far fa-file-image file-type-icon';
+                    imageOptions.style.display = 'block';
+                    videoOptions.style.display = 'none';
+                } else if (['mp4', 'mov', 'mkv', 'webm'].includes(fileExtension)) {
+                    fileIcon.className = 'far fa-file-video file-type-icon';
+                    imageOptions.style.display = 'none';
+                    videoOptions.style.display = 'block';
+                } else {
+                    fileIcon.className = 'far fa-file file-type-icon';
+                    imageOptions.style.display = 'none';
+                    videoOptions.style.display = 'none';
+                }
+                
+                optionsSection.style.display = 'block';
+                uploadProgress.style.width = '0%';
+                resultSection.style.display = 'none';
+            }
+            
+            function processFile() {
+                if (!currentFile) return;
+                
+                optionsSection.style.display = 'none';
+                processingSection.style.display = 'block';
+                
+                const formData = new FormData();
+                formData.append('file', currentFile);
+                
+                const fileExtension = currentFile.name.split('.').pop().toLowerCase();
+                if (['jpg', 'jpeg', 'png', 'webp'].includes(fileExtension)) {
+                    formData.append('quality', qualitySlider.value);
+                    formData.append('resize_factor', resizeSlider.value);
+                } else if (['mp4', 'mov', 'mkv', 'webm'].includes(fileExtension)) {
+                    formData.append('crf', crfSlider.value);
+                }
+                
+                const xhr = new XMLHttpRequest();
+                xhr.open('POST', '/upload', true);
+                
+                let processingInterval;
+                
+                xhr.upload.onprogress = (e) => {
+                    if (e.lengthComputable) {
+                        const percentComplete = (e.loaded / e.total) * 100;
+                        uploadProgress.style.width = percentComplete + '%';
+                        document.getElementById('processing-message').textContent = `Uploading: ${percentComplete.toFixed(0)}%`;
+                        
+                        // When upload completes, start processing animation
+                        if (percentComplete >= 100) {
+                            uploadProgress.textContent = 'Upload Complete';
+                            setTimeout(() => {
+                                document.getElementById('processing-message').textContent = 'Processing file... Please wait.';
+                                startProcessingAnimation();
+                            }, 100);
+                        }
+                    }
+                };
+                
+                function startProcessingAnimation() {
+                    const processingProgressBar = document.getElementById('processing-progress-bar');
+                    let progress = 0;
+                    processingInterval = setInterval(() => {
+                        progress += Math.random() * 15; // Random increments for realistic feel
+                        if (progress > 85) progress = 85; // Cap at 85% until real completion
+                        processingProgressBar.style.width = progress + '%';
+                        processingProgressBar.textContent = Math.round(progress) + '%';
+                    }, 200);
+                }
+                
+                xhr.onload = function() {
+                    // Clear processing animation
+                    if (processingInterval) {
+                        clearInterval(processingInterval);
+                    }
+                    
+                    if (xhr.status === 200) {
+                        const response = JSON.parse(xhr.responseText);
+                        if (response.processing_completed) {
+                            // Complete the processing progress bar
+                            const processingProgressBar = document.getElementById('processing-progress-bar');
+                            processingProgressBar.style.width = '100%';
+                            processingProgressBar.textContent = '100%';
+                            document.getElementById('processing-message').textContent = 'Processing complete!';
+                            
+                            // Show results after a brief delay
+                            setTimeout(() => {
+                                displayResults(response);
+                            }, 500);
+                        } else {
+                            // All processing is now synchronous, so this shouldn't happen
+                            alert('Unexpected response: ' + JSON.stringify(response));
+                            resetUI();
+                        }
+                    } else {
+                        alert('Error processing file: ' + (xhr.responseText || xhr.statusText));
+                        resetUI();
+                    }
+                };
+                
+                xhr.onerror = function() {
+                    // Clear processing animation
+                    if (processingInterval) {
+                        clearInterval(processingInterval);
+                    }
+                    alert('Request failed');
+                    resetUI();
+                };
+                
+                xhr.send(formData);
+            }
+            
+            function displayResults(response) {
+                processingSection.style.display = 'none';
+
+                const originalSize = response.original_size || 0;
+                const reducedSize = response.reduced_size || 0;
+                
+                originalSizeDisplay.textContent = formatFileSize(originalSize);
+                reducedSizeDisplay.textContent = formatFileSize(reducedSize);
+                
+                // Calculate savings, but ensure it's not negative.
+                const sizeReduction = Math.max(0, originalSize - reducedSize);
+                
+                // Calculate percentage, preventing division by zero.
+                const percentageReduction = originalSize > 0 ? (sizeReduction / originalSize) * 100 : 0;
+                
+                savingsPercentage.textContent = percentageReduction.toFixed(1);
+                savingsSize.textContent = formatFileSize(sizeReduction);
+                
+                // Calculate the bar width. If reducedSize is > originalSize, cap the ratio at 1 (100%).
+                const reductionRatio = originalSize > 0 ? reducedSize / originalSize : 0;
+                reducedBar.style.width = (Math.min(reductionRatio, 1) * 100) + '%';
+                
+                // Set download link
+                downloadBtn.href = '/download/' + response.processed_name;
+                
+                resultSection.style.display = 'block';
+            }
+            
+            function resetUI() {
+                // Hide all intermediate sections
+                fileInfo.style.display = 'none';
+                optionsSection.style.display = 'none';
+                processingSection.style.display = 'none';
+                resultSection.style.display = 'none';
+
+                // Show the main upload area again
+                dropArea.style.display = 'block';
+                
+                // Reset file input and state
+                fileInput.value = '';
+                currentFile = null;
+                
+                // Reset progress bars
+                uploadProgress.style.width = '0%';
+                document.getElementById('processing-progress-bar').style.width = '0%';
+                document.getElementById('processing-progress-bar').textContent = '0%';
+            }
+            
+            function formatFileSize(bytes) {
+                // Handle zero, negative, or invalid byte values to prevent NaN errors.
+                if (!bytes || bytes <= 0) return '0 B';
+                const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(1024));
+                return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
+            }
+        });
+    </script>
+</body>
+</html>
