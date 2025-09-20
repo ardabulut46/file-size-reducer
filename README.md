@@ -5,6 +5,7 @@ A powerful web application that compresses your images and videos while maintain
 ![Python](https://img.shields.io/badge/Python-3.8+-blue?logo=python&logoColor=white)
 ![Flask](https://img.shields.io/badge/Flask-Latest-green?logo=flask&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Ready-blue?logo=docker&logoColor=white)
+![Docker Hub](https://img.shields.io/badge/Docker%20Hub-Available-2496ED?logo=docker&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-yellow)
 
 ## 📱 Screenshot
@@ -59,6 +60,15 @@ Go to [http://localhost:8080](http://localhost:8080)
 
 ### Option 2: Run with Docker (Easiest setup)
 
+**From Docker Hub (recommended):**
+```bash
+# Run directly from Docker Hub
+docker run -p 8080:8080 ardabulut46/file-size-reducer:latest
+
+# Open your browser to http://localhost:8080
+```
+
+**From source:**
 ```bash
 # Build and run with Docker Compose
 docker-compose up --build
