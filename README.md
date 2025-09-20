@@ -26,7 +26,7 @@ A powerful web application that compresses your images and videos while maintain
 #### Step 1: Install Python Requirements
 ```bash
 # Clone the repository
-git clone <your-repo-url>
+git clone https://github.com/ardabulut46/file-size-reducer.git
 cd file-size-reducer
 
 # Install Python dependencies
