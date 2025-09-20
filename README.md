@@ -7,6 +7,10 @@ A powerful web application that compresses your images and videos while maintain
 ![Docker](https://img.shields.io/badge/Docker-Ready-blue?logo=docker&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-yellow)
 
+## 📱 Screenshot
+
+![File Size Reducer App](docs/screenshots/app-demo.png)
+
 ## ✨ What This App Does
 
 - **Shrink Images**: Compress JPEG, PNG, WebP, and GIF files by up to 80% while keeping them looking great
